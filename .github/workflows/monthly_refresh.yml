@@ -8,6 +8,8 @@ on:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
 
@@ -15,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -393,9 +396,12 @@ jobs:
           PYEOF
 
       - name: Commit updated data back to GitHub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name  "Powerlink Bot"
           git config user.email "bot@powerlink"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/timmybarrett/powerlink-sales-intelligence.git
           git add Powerlink_PowerBI_Data.csv changes_report.json
           git diff --staged --quiet || git commit -m "Monthly CMS refresh — $(date +'%B %Y')"
-          git push
+          git push origin main || echo "Nothing to push"
