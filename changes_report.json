@@ -1,0 +1,153 @@
+{
+  "new_facilities": [
+    {
+      "Facility_Name": "ST LOUIS ALTENHEIM",
+      "City": "SAINT LOUIS",
+      "State": "MO"
+    },
+    {
+      "Facility_Name": "Embassy at Morehead City",
+      "City": "MOREHEAD CITY",
+      "State": "NC"
+    },
+    {
+      "Facility_Name": "Bloomsbury at Hayes Barton Place",
+      "City": "RALEIGH",
+      "State": "NC"
+    },
+    {
+      "Facility_Name": "PACIFIC VILLAS POST ACUTE",
+      "City": "OCEANSIDE",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "DESERT RIDGE TRANSITIONAL CARE CENTER, LP",
+      "City": "VICTORVILLE",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "EMMANUEL CARE CENTER - TRAVIS",
+      "City": "FAIRFIELD",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "PLUMAS DISTRICT HOSPITAL DP/SNF",
+      "City": "QUINCY",
+      "State": "CA"
+    }
+  ],
+  "dropped_to_1star": [
+    {
+      "Facility_Name": "DIVERSICARE OF OXFORD",
+      "City": "OXFORD",
+      "State": "AL"
+    },
+    {
+      "Facility_Name": "TLC NURSING CENTER",
+      "City": "ONEONTA",
+      "State": "AL"
+    },
+    {
+      "Facility_Name": "Santa Rosa Care Center",
+      "City": "TUCSON",
+      "State": "AZ"
+    },
+    {
+      "Facility_Name": "FOOTHILLS REHABILITATION CENTER",
+      "City": "TUCSON",
+      "State": "AZ"
+    },
+    {
+      "Facility_Name": "LIFE CARE CENTER OF SIERRA VISTA",
+      "City": "SIERRA VISTA",
+      "State": "AZ"
+    },
+    {
+      "Facility_Name": "Prescott Village Nursing & Rehabilitation",
+      "City": "PRESCOTT",
+      "State": "AZ"
+    },
+    {
+      "Facility_Name": "BAILEY CREEK HEALTH AND REHAB",
+      "City": "TEXARKANA",
+      "State": "AR"
+    },
+    {
+      "Facility_Name": "Alma Nursing and Rehab",
+      "City": "Alma",
+      "State": "AR"
+    },
+    {
+      "Facility_Name": "THREE RIVERS HEALTH AND REHABILITATION CENTER",
+      "City": "MARKED TREE",
+      "State": "AR"
+    },
+    {
+      "Facility_Name": "RIVERBANK POST-ACUTE",
+      "City": "RIVERBANK",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "HUNTINGTON DRIVE HEALTH AND REHABILITATION CENTER",
+      "City": "ARCADIA",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "THE VILLAS AT SARATOGA SKILLED NSG & ASSISTED LVG",
+      "City": "SARATOGA",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "BUENA PARK NURSING CENTER",
+      "City": "BUENA PARK",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "SANTA ROSA POST ACUTE",
+      "City": "SANTA ROSA",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "THE MEADOWS POST ACUTE",
+      "City": "PANORAMA CITY",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "MID-WILSHIRE HEALTH CARE CNTR",
+      "City": "LOS ANGELES",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "GUARDIAN CARE AND REHABILITATION CENTER",
+      "City": "MANTECA",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "ORCHARDS AT TULARE",
+      "City": "TULARE",
+      "State": "CA"
+    },
+    {
+      "Facility_Name": "SKYLAKE POST ACUTE",
+      "City": "THORNTON",
+      "State": "CO"
+    },
+    {
+      "Facility_Name": "CAROLTON CHRONIC & CONVALESCENT HOSPITAL INC",
+      "City": "FAIRFIELD",
+      "State": "CT"
+    }
+  ],
+  "new_hot_hot_evs": [
+    {
+      "Facility_Name": "RIVERWOODS AT EXETER",
+      "City": "EXETER",
+      "State": "NH"
+    }
+  ],
+  "new_hot_hot_dietary": [],
+  "total_facilities": 14700,
+  "hot_hot_evs_count": 96,
+  "hot_hot_dietary_count": 20,
+  "hot_leads_count": 449
+}
