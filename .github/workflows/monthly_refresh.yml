@@ -113,25 +113,43 @@ jobs:
           df_vet = df[vet_mask].copy()
           print(f"Veteran facilities found: {len(df_vet)}")
 
+          # Find column names flexibly in citations file
+          print(f"Citation columns: {list(cit.columns[:10])}")
+          tag_col = next((c for c in cit.columns if 'tag' in c.lower()), None)
+          prov_col_cit = next((c for c in cit.columns if 'provider' in c.lower() and ('number' in c.lower() or 'id' in c.lower() or 'ccn' in c.lower())), None)
+          if not tag_col: tag_col = cit.columns[1]
+          if not prov_col_cit: prov_col_cit = cit.columns[0]
+          print(f"Tag col: {tag_col}, Provider col: {prov_col_cit}")
+
+          # Find provider number column in main df
+          prov_col_df = next((c for c in df_vet.columns if 'ccn' in c.lower() or ('provider' in c.lower() and 'number' in c.lower())), None)
+          if not prov_col_df: prov_col_df = df_vet.columns[0]
+          print(f"Main df provider col: {prov_col_df}")
+
           # Count EVS citations (F880 = infection control)
           evs_tags = ['F880','F881','F882','F883','F884','F885']
-          evs_cit = cit[cit['Tag Number'].isin(evs_tags)].copy()
-          evs_counts = evs_cit.groupby('Federal Provider Number').size().reset_index(name='EVS_Citation_Count')
+          evs_cit = cit[cit[tag_col].isin(evs_tags)].copy()
+          evs_counts = evs_cit.groupby(prov_col_cit).size().reset_index(name='EVS_Citation_Count')
+          evs_counts = evs_counts.rename(columns={prov_col_cit: prov_col_df})
 
           # Count dietary citations
           diet_tags = [f'F{n}' for n in range(800, 813)]
-          diet_cit = cit[cit['Tag Number'].isin(diet_tags)].copy()
-          diet_counts = diet_cit.groupby('Federal Provider Number').size().reset_index(name='Dietary_Citation_Count')
+          diet_cit = cit[cit[tag_col].isin(diet_tags)].copy()
+          diet_counts = diet_cit.groupby(prov_col_cit).size().reset_index(name='Dietary_Citation_Count')
+          diet_counts = diet_counts.rename(columns={prov_col_cit: prov_col_df})
 
           # Merge
-          df_vet = df_vet.merge(evs_counts, on='Federal Provider Number', how='left')
-          df_vet = df_vet.merge(diet_counts, on='Federal Provider Number', how='left')
+          df_vet = df_vet.merge(evs_counts, on=prov_col_df, how='left')
+          df_vet = df_vet.merge(diet_counts, on=prov_col_df, how='left')
           df_vet['EVS_Citation_Count'] = pd.to_numeric(df_vet['EVS_Citation_Count'], errors='coerce').fillna(0).astype(int)
           df_vet['Dietary_Citation_Count'] = pd.to_numeric(df_vet['Dietary_Citation_Count'], errors='coerce').fillna(0).astype(int)
 
-          # Star ratings
-          df_vet['Overall_Rating'] = pd.to_numeric(df_vet.get('Overall Rating', pd.Series()), errors='coerce')
-          df_vet['Health_Inspection_Rating'] = pd.to_numeric(df_vet.get('Health Inspection Rating', pd.Series()), errors='coerce')
+          # Star ratings - find columns flexibly
+          overall_col = next((c for c in df_vet.columns if 'overall' in c.lower() and 'rating' in c.lower()), None)
+          health_col = next((c for c in df_vet.columns if 'health' in c.lower() and 'inspection' in c.lower() and 'rating' in c.lower()), None)
+          print(f"Rating cols: overall={overall_col}, health={health_col}")
+          df_vet['Overall_Rating'] = pd.to_numeric(df_vet[overall_col], errors='coerce') if overall_col else 3
+          df_vet['Health_Inspection_Rating'] = pd.to_numeric(df_vet[health_col], errors='coerce') if health_col else 3
 
           # HOT HOT flags
           df_vet['HOT_HOT_EVS'] = (
