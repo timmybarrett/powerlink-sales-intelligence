@@ -90,10 +90,20 @@ jobs:
           print("Loading Care Compare data...")
           df = pd.read_csv("NH_ProviderInfo_latest.csv", dtype=str, low_memory=False)
           df.columns = df.columns.str.strip()
+          print(f"Care Compare columns: {list(df.columns[:10])}")
 
           print("Loading citations data...")
           cit = pd.read_csv("NH_HealthCitations_latest.csv", dtype=str, low_memory=False)
           cit.columns = cit.columns.str.strip()
+
+          # Find facility name column flexibly
+          name_col = next((c for c in df.columns if 'facility' in c.lower() and 'name' in c.lower()), None)
+          if not name_col:
+              name_col = next((c for c in df.columns if 'provider' in c.lower() and 'name' in c.lower()), None)
+          if not name_col:
+              name_col = df.columns[0]
+          print(f"Using name column: {name_col}")
+          df = df.rename(columns={name_col: 'Facility Name'})
 
           # Filter to veteran homes only
           vet_mask = df['Facility Name'].str.contains(
@@ -161,7 +171,8 @@ jobs:
               'WA':'Pacific','OR':'Pacific','CA':'Pacific','AK':'Pacific','HI':'Pacific',
               'PR':'Territories','VI':'Territories','GU':'Territories',
           }
-          df_vet['Region'] = df_vet['Provider State'].map(region_map).fillna('Other')
+          state_col = next((c for c in df_vet.columns if 'state' in c.lower()), 'Provider State')
+          df_vet['Region'] = df_vet[state_col].map(region_map).fillna('Other')
 
           # Save
           df_vet.to_csv('Powerlink_PowerBI_Data.csv', index=False)
