@@ -333,9 +333,9 @@ jobs:
           with open('changes_report.json') as f:
               report = json.load(f)
 
-          FROM = os.environ['ALERT_EMAIL_FROM']
-          TO = os.environ['ALERT_EMAIL_TO']
-          PASSWORD = os.environ['ALERT_EMAIL_PASSWORD']
+          FROM = os.environ['ALERT_EMAIL_FROM'].strip()
+          TO = os.environ['ALERT_EMAIL_TO'].strip().replace('\n', '').replace('\r', '')
+          PASSWORD = os.environ['ALERT_EMAIL_PASSWORD'].strip()
 
           msg = MIMEMultipart('alternative')
           msg['Subject'] = f"Powerlink HOT HOT Update — {report['hot_hot_evs']} EVS | {report['hot_hot_dietary']} Dietary leads pushed to SharpSpring"
@@ -360,7 +360,8 @@ jobs:
 
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(FROM, PASSWORD)
-              server.sendmail(FROM, TO, msg.as_string())
+              recipients = [e.strip() for e in TO.split(',') if e.strip()]
+              server.sendmail(FROM, recipients, msg.as_string())
 
           print("Email sent successfully")
           PYEOF
