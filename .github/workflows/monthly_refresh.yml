@@ -1,248 +1,42 @@
-
-/
-Claude finished the response
-i would like to get back to pushing the hot hot list to ShapSpring. Can you remind me what you need to accomplish this
-
-9:47 AM
-
-Relevant chats
-Relevant chats
-Great, I found the full context! Here's where things stood when you left off:
-
-The system is fully built and working — the monthly GitHub Actions workflow runs, identifies new HOT HOT facilities from CMS data, and pushes everything to your Streamlit dashboard and email alerts.
-
-To push the HOT HOT list to SharpSpring, here's exactly what's needed:
-
-Step 1 — Two GitHub Secrets (the only thing blocking the build) You need to add these to your repo at github.com/timmybarrett/powerlink-sales-intelligence → Settings → Secrets and variables → Actions:
-
-SHARPSPRING_ACCOUNT_ID
-SHARPSPRING_SECRET_KEY
-To find those values: log into SharpSpring → click your username (top right) → Settings → SharpSpring API → API Settings.
-
-Once you have those two secrets added, I can build:
-
-The GitHub Actions step that auto-pushes new HOT HOT facilities into SharpSpring as leads (tagged by tier — EVS vs Dietary, with CMS data fields populated)
-The custom field mapping on each lead record (star rating, citations, bed count, opportunity tier, Care Compare link)
-Three email campaign sequences (HOT HOT EVS, HOT HOT Dietary, Incumbent Displacement)
-Do you have those SharpSpring credentials handy, or do you need to grab them from your account first?
-
-Account ID: 00A061393F001F8F9420B92C28C825DD Secret key: A14B146CCF92AE4535EC51A503A7AE4C
-
-9:51 AM
-Got those — but let's keep your credentials safe. Please don't share API keys in chat. Let's add them directly as GitHub Secrets instead.
-
-Here's what to do:
-
-Go to github.com/timmybarrett/powerlink-sales-intelligence
-Click Settings → Secrets and variables → Actions
-Click New repository secret and add:
-Name: SHARPSPRING_ACCOUNT_ID / Value: the Account ID you have
-Name: SHARPSPRING_SECRET_KEY / Value: the Secret Key you have
-Once those are saved in GitHub, come back here and let me know — I'll build the SharpSpring push step into your workflow. The credentials will be used securely from there and you won't need to share them again.
-
-1780926834234_image.png
-Where do i go?
-
-9:54 AM
-From that screen, click Settings in the top navigation bar (you can see it on the far right of the top menu).
-
-Then once you're in Settings:
-
-In the left sidebar, click Secrets and variables
-Click Actions
-Click New repository secret
-Add both secrets there and come back here when done!
-
-done
-
-9:55 AM
-Perfect! Now let me build the SharpSpring push step into your workflow. Let me first look at your current workflow file to know exactly what to add to it.
-
-
-Relevant chats
-Relevant chats
-Good — I have enough context. Now let me pull the current workflow file from your GitHub repo and add the SharpSpring push step to it.
-
-
-Read the current workflow file from GitHub
-Read the current workflow file from GitHub
-I don't have your GitHub token in this new session. Let me build the SharpSpring push script now and give you the updated workflow file to paste in. Let me first check what the current workflow looks like from past context.
-
-
-Relevant chats
-Relevant chats
-Good — I have enough context to build the full updated workflow. Let me construct it now with the SharpSpring push step added.
-
-
-Ran 2 commands, read a file
-Ran 2 commands, read a file
-Download that file. Now here's how to replace the existing workflow in GitHub:
-
-Go to github.com/timmybarrett/powerlink-sales-intelligence
-Click into the folder .github → workflows → monthly_refresh.yml
-Click the pencil icon (Edit) in the top right of the file view
-Select all the existing text (Cmd+A) and delete it
-Open the downloaded file in TextEdit, select all (Cmd+A), copy (Cmd+C), and paste into GitHub (Cmd+V)
-Click "Commit changes" → "Commit changes"
-Then go to Actions → Monthly CMS Data Refresh → Run workflow to test it. The new step "Push HOT HOT leads to SharpSpring" will run automatically and push all your HOT HOT facilities directly into SharpSpring as leads, each tagged with their tier, citation counts, star ratings, and a link to their Care Compare page.
-
-
-Monthly refresh
-YML 
-will this update monthly?
-
-9:57 AM
-Yes! The workflow is already scheduled with this line at the top:
-
-cron: '0 8 1 * *'
-That means it runs automatically at 8:00 AM UTC on the 1st of every month. Each run will:
-
-Pull fresh CMS data
-Rebuild the HOT HOT list with the latest ratings and citations
-Push any HOT HOT facilities to SharpSpring as leads
-Email you a summary
-Update the Streamlit dashboard
-The one thing to be aware of — right now the SharpSpring step will re-push all HOT HOT leads every month, which could create duplicates in your CRM over time. Once we confirm the first push works correctly, I can add logic to only push new facilities that weren't in last month's list. But let's get the first run working first.
-
-Go ahead and run the workflow manually now and let me know what you see!
-
-where do i go?
-
-9:59 AM
-Go to github.com/timmybarrett/powerlink-sales-intelligence and follow these steps:
-
-Click Actions in the top menu bar
-Click Monthly CMS Data Refresh in the left sidebar
-Click the grey Run workflow button on the right
-Click the green Run workflow button in the dropdown
-Then click the spinning circle to watch it live and let me know what happens!
-
-1780927226363_image.png
-10:00 AM
-That's the old run #2 from last week — it only took 34s which means it ran before the new workflow file was uploaded. You need to make sure the new monthly_refresh.yml file (with the SharpSpring step) is actually saved in GitHub first.
-
-Have you replaced the workflow file yet? That was the step before this — downloading the new file and pasting it into GitHub.
-
-If not, here's where to do it:
-
-Go to github.com/timmybarrett/powerlink-sales-intelligence
-Click the .github folder → workflows → monthly_refresh.yml
-Click the pencil icon to edit
-Select all, delete, paste in the new file content
-Commit changes
-Once that's done, then run the workflow and it should take longer (2-3 minutes) and you'll see the new "Push HOT HOT leads to SharpSpring" step in the list. Let me know where you're at!
-
-1780927471370_image.png
-something aint right.
-
-10:04 AM
-I can see exactly what happened. Good news and bad news:
-
-Good news — I can see the SharpSpring step is missing from this run, which means this is still the old workflow file. BUT everything else worked perfectly — CMS data downloaded, database rebuilt, email sent.
-
-The error is the same git push permissions issue from before:
-
-Permission to timmybarrett/powerlink-sales-intelligence.git denied to github-actions[bot]
-This needs one fix in GitHub itself — you need to enable workflow write permissions:
-
-Go to github.com/timmybarrett/powerlink-sales-intelligence
-Click Settings → scroll down the left sidebar to Actions → click General
-Scroll down to "Workflow permissions"
-Select "Read and write permissions"
-Click Save
-Then we'll also replace the workflow file with the new one (with the SharpSpring step). Let's fix the permissions first — go do that and tell me when it's done!
-
-screencapture-github-timmybarrett-powerlink-sales-intelligence-settings-2026-06-08-10_07_55.jpg
-don't see workflow permissions
-
-10:10 AM
-You're on the General settings page. You need to go one level deeper into Actions settings. In the left sidebar, click Actions then click General underneath it.
-
-screencapture-github-timmybarrett-powerlink-sales-intelligence-settings-actions-2026-06-08-10_11_43.jpg
-what sould i click?
-
-10:12 AM
-Perfect — I can see it! Under Workflow permissions near the bottom:
-
-Select "Read and write permissions"
-Click Save
-That's it!
-
-done
-
-10:14 AM
-Now let's run the workflow. Go to:
-
-Actions tab (top menu)
-Monthly CMS Data Refresh in the left sidebar
-Run workflow → Run workflow
-Then click the spinning circle to watch it live and send me a screenshot of the results!
-
-1780930747918_image.png
-10:59 AM
-This is still the old run from last week — notice it says "failed last week in 23s" at the top. You need to trigger a new run. Click Summary in the left sidebar to go back, then click the Re-run all jobs button — or better yet go back to Actions and trigger a fresh run.
-
-Also I notice the new workflow file (with the SharpSpring step) still needs to be uploaded. Two things to do in order:
-
-First — upload the new workflow file:
-
-Go to github.com/timmybarrett/powerlink-sales-intelligence
-Click .github → workflows → monthly_refresh.yml
-Click the pencil icon to edit
-Select all, delete, paste in the new file
-Commit
-Then — run the workflow fresh.
-
-Have you replaced the workflow file yet? That's the key step that's still missing — without it the SharpSpring push step won't run.
-
-
-
-
-
-
-
-
-Claude is AI and can make mistakes. Please double-check responses.
-Monthly refresh · YML
 name: Monthly CMS Data Refresh
- 
+
 on:
   schedule:
     - cron: '0 8 1 * *'
   workflow_dispatch:
- 
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
     permissions:
       contents: write
- 
+
     steps:
- 
+
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
- 
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
- 
+
       - name: Install dependencies
         run: pip install pandas requests openpyxl
- 
+
       - name: Download latest Care Compare data
         run: |
           python3 << 'PYEOF'
           import urllib.request, json, os
- 
+
           print("Fetching latest Care Compare download URL...")
           meta_url = "https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items/4pq5-n9py"
           with urllib.request.urlopen(meta_url, timeout=30) as r:
               meta = json.load(r)
- 
+
           dist = meta.get("distribution", [])
           csv_url = None
           for item in dist:
@@ -250,26 +44,26 @@ jobs:
               if url.endswith(".csv"):
                   csv_url = url
                   break
- 
+
           if not csv_url:
               raise Exception("Could not find Care Compare CSV URL")
- 
+
           print(f"Downloading from: {csv_url}")
           urllib.request.urlretrieve(csv_url, "NH_ProviderInfo_latest.csv")
           size = os.path.getsize("NH_ProviderInfo_latest.csv")
           print(f"Downloaded {size:,} bytes")
           PYEOF
- 
+
       - name: Download latest Health Citations data
         run: |
           python3 << 'PYEOF'
           import urllib.request, json, os
- 
+
           print("Fetching Health Citations URL...")
           meta_url = "https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items/r5ix-sfxw"
           with urllib.request.urlopen(meta_url, timeout=30) as r:
               meta = json.load(r)
- 
+
           dist = meta.get("distribution", [])
           csv_url = None
           for item in dist:
@@ -277,30 +71,30 @@ jobs:
               if url.endswith(".csv"):
                   csv_url = url
                   break
- 
+
           if not csv_url:
               raise Exception("Could not find Health Citations CSV URL")
- 
+
           print(f"Downloading from: {csv_url}")
           urllib.request.urlretrieve(csv_url, "NH_HealthCitations_latest.csv")
           size = os.path.getsize("NH_HealthCitations_latest.csv")
           print(f"Downloaded {size:,} bytes")
           PYEOF
- 
+
       - name: Rebuild Powerlink database
         run: |
           python3 << 'PYEOF'
           import pandas as pd
           import json
- 
+
           print("Loading Care Compare data...")
           df = pd.read_csv("NH_ProviderInfo_latest.csv", dtype=str, low_memory=False)
           df.columns = df.columns.str.strip()
- 
+
           print("Loading citations data...")
           cit = pd.read_csv("NH_HealthCitations_latest.csv", dtype=str, low_memory=False)
           cit.columns = cit.columns.str.strip()
- 
+
           # Filter to veteran homes only
           vet_mask = df['Facility Name'].str.contains(
               r"veteran|veter|state home|soldiers|sailor|war veteran",
@@ -308,38 +102,38 @@ jobs:
           )
           df_vet = df[vet_mask].copy()
           print(f"Veteran facilities found: {len(df_vet)}")
- 
+
           # Count EVS citations (F880 = infection control)
           evs_tags = ['F880','F881','F882','F883','F884','F885']
           evs_cit = cit[cit['Tag Number'].isin(evs_tags)].copy()
           evs_counts = evs_cit.groupby('Federal Provider Number').size().reset_index(name='EVS_Citation_Count')
- 
+
           # Count dietary citations
           diet_tags = [f'F{n}' for n in range(800, 813)]
           diet_cit = cit[cit['Tag Number'].isin(diet_tags)].copy()
           diet_counts = diet_cit.groupby('Federal Provider Number').size().reset_index(name='Dietary_Citation_Count')
- 
+
           # Merge
           df_vet = df_vet.merge(evs_counts, on='Federal Provider Number', how='left')
           df_vet = df_vet.merge(diet_counts, on='Federal Provider Number', how='left')
           df_vet['EVS_Citation_Count'] = pd.to_numeric(df_vet['EVS_Citation_Count'], errors='coerce').fillna(0).astype(int)
           df_vet['Dietary_Citation_Count'] = pd.to_numeric(df_vet['Dietary_Citation_Count'], errors='coerce').fillna(0).astype(int)
- 
+
           # Star ratings
           df_vet['Overall_Rating'] = pd.to_numeric(df_vet.get('Overall Rating', pd.Series()), errors='coerce')
           df_vet['Health_Inspection_Rating'] = pd.to_numeric(df_vet.get('Health Inspection Rating', pd.Series()), errors='coerce')
- 
+
           # HOT HOT flags
           df_vet['HOT_HOT_EVS'] = (
               (df_vet['EVS_Citation_Count'] >= 2) &
               (df_vet['Health_Inspection_Rating'] <= 2)
           ).map({True: 'Yes', False: 'No'})
- 
+
           df_vet['HOT_HOT_Dietary'] = (
               (df_vet['Dietary_Citation_Count'] >= 2) &
               (df_vet['Health_Inspection_Rating'] <= 2)
           ).map({True: 'Yes', False: 'No'})
- 
+
           # Priority sort
           def priority(row):
               if row['HOT_HOT_EVS'] == 'Yes' and row['HOT_HOT_Dietary'] == 'Yes':
@@ -349,7 +143,7 @@ jobs:
               else:
                   return 3
           df_vet['Priority_Sort'] = df_vet.apply(priority, axis=1)
- 
+
           # Region map
           region_map = {
               'ME':'Northeast','NH':'Northeast','VT':'Northeast','MA':'Northeast',
@@ -368,10 +162,10 @@ jobs:
               'PR':'Territories','VI':'Territories','GU':'Territories',
           }
           df_vet['Region'] = df_vet['Provider State'].map(region_map).fillna('Other')
- 
+
           # Save
           df_vet.to_csv('Powerlink_PowerBI_Data.csv', index=False)
- 
+
           # Changes report
           hot_evs = int((df_vet['HOT_HOT_EVS'] == 'Yes').sum())
           hot_diet = int((df_vet['HOT_HOT_Dietary'] == 'Yes').sum())
@@ -384,10 +178,10 @@ jobs:
           }
           with open('changes_report.json', 'w') as f:
               json.dump(report, f)
- 
+
           print(f"Done. HOT HOT EVS: {hot_evs}, HOT HOT Dietary: {hot_diet}, Both: {both}")
           PYEOF
- 
+
       - name: Push HOT HOT leads to SharpSpring
         env:
           SHARPSPRING_ACCOUNT_ID: ${{ secrets.SHARPSPRING_ACCOUNT_ID }}
@@ -401,10 +195,10 @@ jobs:
           import time
           import os
           import uuid
- 
+
           account_id = os.environ['SHARPSPRING_ACCOUNT_ID']
           secret_key = os.environ['SHARPSPRING_SECRET_KEY']
- 
+
           def sharpspring_request(method, params):
               request_id = str(uuid.uuid4())
               session_id = hashlib.md5((account_id + secret_key).encode()).hexdigest()
@@ -417,12 +211,12 @@ jobs:
               resp = requests.post(url, json=payload, timeout=30)
               resp.raise_for_status()
               return resp.json()
- 
+
           # Load the HOT HOT leads
           df = pd.read_csv('Powerlink_PowerBI_Data.csv', dtype=str)
           hot = df[(df['HOT_HOT_EVS'] == 'Yes') | (df['HOT_HOT_Dietary'] == 'Yes')].copy()
           print(f"Total HOT HOT leads to sync: {len(hot)}")
- 
+
           # Build lead objects for SharpSpring
           leads = []
           for _, row in hot.iterrows():
@@ -440,7 +234,7 @@ jobs:
               hot_diet = str(row.get('HOT_HOT_Dietary', 'No')).strip()
               priority = str(row.get('Priority_Sort', '3')).strip()
               federal_id = str(row.get('Federal Provider Number', '')).strip()
- 
+
               # Determine tier label
               if hot_evs == 'Yes' and hot_diet == 'Yes':
                   tier = 'HOT HOT EVS + Dietary'
@@ -448,9 +242,9 @@ jobs:
                   tier = 'HOT HOT EVS'
               else:
                   tier = 'HOT HOT Dietary'
- 
+
               care_compare_url = f"https://www.medicare.gov/care-compare/details/nursing-home/{federal_id}" if federal_id else ""
- 
+
               lead = {
                   "companyName": facility_name,
                   "city": city,
@@ -473,7 +267,7 @@ jobs:
                   "emailAddress": "",
               }
               leads.append(lead)
- 
+
           # Push in batches of 20
           batch_size = 20
           total_pushed = 0
@@ -492,10 +286,10 @@ jobs:
               except Exception as e:
                   print(f"Batch {i//batch_size + 1} error: {e}")
                   errors += 1
- 
+
           print(f"\nSharpSpring sync complete. Pushed: {total_pushed}, Errors: {errors}")
           PYEOF
- 
+
       - name: Send email alert
         env:
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
@@ -506,19 +300,19 @@ jobs:
           import smtplib, json, os
           from email.mime.multipart import MIMEMultipart
           from email.mime.text import MIMEText
- 
+
           with open('changes_report.json') as f:
               report = json.load(f)
- 
+
           FROM = os.environ['ALERT_EMAIL_FROM']
           TO = os.environ['ALERT_EMAIL_TO']
           PASSWORD = os.environ['ALERT_EMAIL_PASSWORD']
- 
+
           msg = MIMEMultipart('alternative')
           msg['Subject'] = f"Powerlink HOT HOT Update — {report['hot_hot_evs']} EVS | {report['hot_hot_dietary']} Dietary leads pushed to SharpSpring"
           msg['From'] = FROM
           msg['To'] = TO
- 
+
           html = f"""
           <html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
           <h2 style="color:#1a1a2e;">Powerlink Monthly Intelligence Refresh</h2>
@@ -532,16 +326,16 @@ jobs:
           <a href="https://powerlink-sales-intel.streamlit.app" style="display:inline-block;background:#1a1a2e;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin-top:10px;">View Live Dashboard</a>
           </body></html>
           """
- 
+
           msg.attach(MIMEText(html, 'html'))
- 
+
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(FROM, PASSWORD)
               server.sendmail(FROM, TO, msg.as_string())
- 
+
           print("Email sent successfully")
           PYEOF
- 
+
       - name: Commit updated data back to GitHub
         run: |
           git config user.name  "Powerlink Bot"
@@ -550,7 +344,3 @@ jobs:
           git add Powerlink_PowerBI_Data.csv changes_report.json
           git diff --staged --quiet || git commit -m "Monthly CMS refresh — $(date +'%B %Y')"
           git push
- 
-
-
-1Password menu is available. Press down arrow to select.
