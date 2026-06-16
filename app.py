@@ -161,7 +161,7 @@ def load_data():
         "F880_Infection_Citations","Priority_Sort"
     ]
     for c in num_cols:
-        if c in df.columns:
+        if c in df.columns and isinstance(df[c], pd.Series):
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
     # ── Rebuild HOT HOT flags if missing/wrong ──────────────
