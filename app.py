@@ -118,6 +118,21 @@ def load_data():
     if rename:
         df = df.rename(columns=rename)
 
+    # Multiple source aliases can normalize to the same target name (for
+    # example, both "Health Inspection Rating" and
+    # "Health_Inspection_Rating"). Coalesce those columns before any code
+    # selects them; otherwise pandas returns a DataFrame instead of a Series.
+    if df.columns.duplicated().any():
+        coalesced = {}
+        for col in dict.fromkeys(df.columns):
+            matching = df.loc[:, df.columns == col]
+            if matching.shape[1] == 1:
+                coalesced[col] = matching.iloc[:, 0]
+            else:
+                nonblank = matching.replace(r"^\s*$", pd.NA, regex=True)
+                coalesced[col] = nonblank.bfill(axis=1).iloc[:, 0]
+        df = pd.DataFrame(coalesced, index=df.index)
+
     # ── Ensure required columns exist ───────────────────────
     required = [
         "CCN","Facility_Name","City","State","ZIP","Phone",
@@ -340,7 +355,13 @@ with chart_col:
     fig_bar.update_xaxes(showgrid=True, gridcolor="#EEE")
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    star_counts = fdf["Health_Inspection_Stars"].dropna().astype(float).astype(int).value_counts().sort_index()
+    star_counts = (
+        pd.to_numeric(fdf["Health_Inspection_Stars"], errors="coerce")
+        .dropna()
+        .astype(int)
+        .value_counts()
+        .sort_index()
+    )
     if len(star_counts) > 0:
         fig_donut = go.Figure(go.Pie(
             labels=[f"{i} ⭐" for i in star_counts.index],
