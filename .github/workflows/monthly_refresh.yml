@@ -81,6 +81,70 @@ jobs:
           print(f"Downloaded {size:,} bytes")
           PYEOF
 
+      - name: Download and process HCRIS SNF cost report (FY2024)
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request, zipfile, os
+          import pandas as pd
+
+          print("Downloading HCRIS SNF FY2024 cost report...")
+          urllib.request.urlretrieve("https://downloads.cms.gov/FILES/HCRIS/SNF10FY2024.ZIP", "SNF10FY2024.ZIP")
+          with zipfile.ZipFile("SNF10FY2024.ZIP") as z:
+              z.extractall("hcris_2024")
+          print("Extracted:", os.listdir("hcris_2024"))
+
+          rpt = pd.read_csv('hcris_2024/SNF10_2024_rpt.csv', header=None, dtype=str,
+              names=['rpt_rec_num','col2','prvdr_num','col4','col5','col6',
+                     'fy_bgn_dt','fy_end_dt','proc_dt','col10','col11','col12',
+                     'col13','col14','col15','col16','col17','col18','col19'])
+          rpt['fy_end_dt'] = pd.to_datetime(rpt['fy_end_dt'], errors='coerce')
+          rpt = rpt.sort_values('fy_end_dt', ascending=False).drop_duplicates('prvdr_num', keep='first')
+          print(f"Unique providers with a filed cost report: {len(rpt)}")
+
+          # Worksheet A000000: line 00700 = housekeeping, line 00800 = dietary
+          # Column 00100 = direct employee costs, Column 00200 = contract labor costs
+          target_keys = {
+              ('A000000','00700','00100'): 'hk_direct',
+              ('A000000','00700','00200'): 'hk_contract',
+              ('A000000','00800','00100'): 'diet_direct',
+              ('A000000','00800','00200'): 'diet_contract',
+          }
+          cost_data = {}
+          rows_seen = 0
+          for chunk in pd.read_csv('hcris_2024/SNF10_2024_nmrc.csv', header=None,
+                  names=['rpt_rec_num','wksht_cd','line_num','clmn_num','itm_val_num'],
+                  dtype=str, chunksize=500000):
+              mask = (
+                  (chunk['wksht_cd'] == 'A000000') &
+                  (chunk['line_num'].isin(['00700','00800'])) &
+                  (chunk['clmn_num'].isin(['00100','00200']))
+              )
+              filtered = chunk[mask]
+              for _, row in filtered.iterrows():
+                  key = (row['wksht_cd'], row['line_num'], row['clmn_num'])
+                  if key in target_keys:
+                      field = target_keys[key]
+                      rpt_id = row['rpt_rec_num']
+                      if rpt_id not in cost_data:
+                          cost_data[rpt_id] = {}
+                      try:
+                          cost_data[rpt_id][field] = float(row['itm_val_num'])
+                      except:
+                          cost_data[rpt_id][field] = 0.0
+              rows_seen += len(chunk)
+          print(f"Scanned {rows_seen:,} HCRIS numeric rows, found cost data for {len(cost_data)} reports")
+
+          cost_df = pd.DataFrame.from_dict(cost_data, orient='index').reset_index()
+          cost_df.columns = ['rpt_rec_num'] + list(cost_df.columns[1:])
+          cost_df['rpt_rec_num'] = cost_df['rpt_rec_num'].astype(str)
+          rpt['rpt_rec_num'] = rpt['rpt_rec_num'].astype(str)
+
+          hcris = rpt[['rpt_rec_num','prvdr_num']].merge(cost_df, on='rpt_rec_num', how='left')
+          hcris['prvdr_num'] = hcris['prvdr_num'].str.strip().str.zfill(6)
+          hcris.to_csv('hcris_processed.csv', index=False)
+          print(f"Saved hcris_processed.csv: {len(hcris)} facilities")
+          PYEOF
+
       - name: Rebuild Powerlink database
         run: |
           python3 << 'PYEOF'
@@ -137,6 +201,17 @@ jobs:
           df['EVS_Citation_Count'] = pd.to_numeric(df['EVS_Citation_Count'], errors='coerce').fillna(0).astype(int)
           df['Dietary_Citation_Count'] = pd.to_numeric(df['Dietary_Citation_Count'], errors='coerce').fillna(0).astype(int)
 
+          # Merge HCRIS cost report data (self-performing vs. contracted labor)
+          hcris = pd.read_csv('hcris_processed.csv', dtype=str)
+          hcris = hcris.rename(columns={'prvdr_num': prov_col_df})
+          hcris[prov_col_df] = hcris[prov_col_df].astype(str).str.strip().str.zfill(6)
+          df[prov_col_df] = df[prov_col_df].astype(str).str.strip().str.zfill(6)
+          hcris_cols = ['hk_direct','hk_contract','diet_direct','diet_contract']
+          df = df.merge(hcris[[prov_col_df] + hcris_cols], on=prov_col_df, how='left')
+          for c in hcris_cols:
+              df[c] = pd.to_numeric(df[c], errors='coerce')
+          print(f"Facilities matched to an HCRIS cost report: {df['hk_direct'].notna().sum()}")
+
           # Star ratings - find columns flexibly
           overall_col = next((c for c in df.columns if 'overall' in c.lower() and 'rating' in c.lower()), None)
           health_col = next((c for c in df.columns if 'health' in c.lower() and 'inspection' in c.lower() and 'rating' in c.lower()), None)
@@ -144,26 +219,41 @@ jobs:
           df['Overall_Rating'] = pd.to_numeric(df[overall_col], errors='coerce') if overall_col else 3
           df['Health_Inspection_Rating'] = pd.to_numeric(df[health_col], errors='coerce') if health_col else 3
 
-          # HOT HOT flags
+          # HOT HOT flags — self-performing (no contracted labor on the cost report)
+          # AND has documented EVS/dietary deficiency citations. This is the same
+          # logic used in the Powerlink SNF Opportunity Database Excel workbook.
+          evs_self_performing = (df['hk_contract'].fillna(0) == 0) & (df['hk_direct'].fillna(0) > 0)
+          diet_self_performing = (df['diet_contract'].fillna(0) == 0) & (df['diet_direct'].fillna(0) > 0)
+
           df['HOT_HOT_EVS'] = (
-              (df['EVS_Citation_Count'] >= 2) &
-              (df['Health_Inspection_Rating'] <= 2)
+              evs_self_performing & (df['EVS_Citation_Count'] >= 1)
           ).map({True: 'Yes', False: 'No'})
 
           df['HOT_HOT_Dietary'] = (
-              (df['Dietary_Citation_Count'] >= 2) &
-              (df['Health_Inspection_Rating'] <= 2)
+              diet_self_performing & (df['Dietary_Citation_Count'] >= 1)
           ).map({True: 'Yes', False: 'No'})
 
-          # Priority sort
-          def priority(row):
-              if row['HOT_HOT_EVS'] == 'Yes' and row['HOT_HOT_Dietary'] == 'Yes':
+          # Incumbent Displacement — already contracting out EVS and/or dietary
+          is_incumbent = (df['hk_contract'].fillna(0) > 0) | (df['diet_contract'].fillna(0) > 0)
+
+          # Warm Leads — not HOT HOT, not already contracted, but a low health
+          # inspection rating is a quality warning sign worth watching
+          is_hot_hot = (df['HOT_HOT_EVS'] == 'Yes') | (df['HOT_HOT_Dietary'] == 'Yes')
+          is_warm = (~is_hot_hot) & (~is_incumbent) & (df['Health_Inspection_Rating'] <= 2)
+
+          # Priority sort: 1=Hot lead (HOT HOT), 2=Incumbent Displacement, 3=Warm Lead, 4=Other
+          def priority(row_is_hot_hot, row_is_incumbent, row_is_warm):
+              if row_is_hot_hot:
                   return 1
-              elif row['HOT_HOT_EVS'] == 'Yes' or row['HOT_HOT_Dietary'] == 'Yes':
+              elif row_is_incumbent:
                   return 2
-              else:
+              elif row_is_warm:
                   return 3
-          df['Priority_Sort'] = df.apply(priority, axis=1)
+              else:
+                  return 4
+          df['Priority_Sort'] = [
+              priority(h, i, w) for h, i, w in zip(is_hot_hot, is_incumbent, is_warm)
+          ]
 
           # Region map
           region_map = {
