@@ -244,18 +244,23 @@ jobs:
           df['Overall_Rating'] = pd.to_numeric(df[overall_col], errors='coerce') if overall_col else 3
           df['Health_Inspection_Rating'] = pd.to_numeric(df[health_col], errors='coerce') if health_col else 3
 
-          # HOT HOT flags — self-performing (no contracted labor on the cost report)
-          # AND has documented EVS/dietary deficiency citations. This is the same
-          # logic used in the Powerlink SNF Opportunity Database Excel workbook.
+          # HOT HOT flags:
+          #   EVS     = self-performing (no contracted housekeeping labor) AND
+          #             BOTH Health Inspection Rating and Overall Rating are 1-2 stars
+          #   Dietary = self-performing (no contracted dietary labor) AND
+          #             Overall Rating is 1-2 stars
           evs_self_performing = (df['hk_contract'].fillna(0) == 0) & (df['hk_direct'].fillna(0) > 0)
           diet_self_performing = (df['diet_contract'].fillna(0) == 0) & (df['diet_direct'].fillna(0) > 0)
 
           df['HOT_HOT_EVS'] = (
-              evs_self_performing & (df['EVS_Citation_Count'] >= 1)
+              evs_self_performing &
+              (df['Health_Inspection_Rating'] <= 2) &
+              (df['Overall_Rating'] <= 2)
           ).map({True: 'Yes', False: 'No'})
 
           df['HOT_HOT_Dietary'] = (
-              diet_self_performing & (df['Dietary_Citation_Count'] >= 1)
+              diet_self_performing &
+              (df['Overall_Rating'] <= 2)
           ).map({True: 'Yes', False: 'No'})
 
           # Incumbent Displacement — already contracting out EVS and/or dietary
@@ -279,6 +284,58 @@ jobs:
           df['Priority_Sort'] = [
               priority(h, i, w) for h, i, w in zip(is_hot_hot, is_incumbent, is_warm)
           ]
+
+          # ── Persistence: only update a facility's flags if it was actually
+          # re-surveyed since last month. If CMS hasn't re-inspected a facility,
+          # its HOT_HOT_EVS / HOT_HOT_Dietary / Priority_Sort stay exactly as
+          # they were in last month's saved file — the freshly-computed values
+          # above are discarded for that row and the prior month's are kept.
+          survey_col = next((c for c in df.columns if c.strip().lower() == 'rating cycle 1 standard survey health date'), None)
+          if survey_col:
+              df['_survey_date'] = df[survey_col]
+          else:
+              df['_survey_date'] = ''
+
+          changed_count = 0
+          held_count = 0
+
+          try:
+              prev = pd.read_csv('Powerlink_PowerBI_Data.csv', dtype=str, low_memory=False)
+              prev.columns = prev.columns.str.strip()
+              prev_survey_col = next((c for c in prev.columns if c.strip().lower() == 'rating cycle 1 standard survey health date'), None)
+              if prov_col_df in prev.columns and prev_survey_col and 'HOT_HOT_EVS' in prev.columns:
+                  prev[prov_col_df] = prev[prov_col_df].astype(str).str.strip().str.zfill(6)
+                  prev_small = prev[[prov_col_df, prev_survey_col, 'HOT_HOT_EVS', 'HOT_HOT_Dietary', 'Priority_Sort']].copy()
+                  prev_small = prev_small.rename(columns={
+                      prev_survey_col: '_prev_survey_date',
+                      'HOT_HOT_EVS': '_prev_HOT_HOT_EVS',
+                      'HOT_HOT_Dietary': '_prev_HOT_HOT_Dietary',
+                      'Priority_Sort': '_prev_Priority_Sort',
+                  })
+                  df = df.merge(prev_small, on=prov_col_df, how='left')
+
+                  not_reviewed = (
+                      df['_prev_survey_date'].notna() &
+                      (df['_survey_date'].astype(str) == df['_prev_survey_date'].astype(str))
+                  )
+                  changed_count = int((~not_reviewed & df['_prev_survey_date'].notna()).sum())
+                  held_count = int(not_reviewed.sum())
+                  print(f"Facilities with a new survey since last refresh: {changed_count}")
+                  print(f"Facilities held at last month's flags (not re-surveyed): {held_count}")
+
+                  df.loc[not_reviewed, 'HOT_HOT_EVS'] = df.loc[not_reviewed, '_prev_HOT_HOT_EVS']
+                  df.loc[not_reviewed, 'HOT_HOT_Dietary'] = df.loc[not_reviewed, '_prev_HOT_HOT_Dietary']
+                  df.loc[not_reviewed, 'Priority_Sort'] = pd.to_numeric(
+                      df.loc[not_reviewed, '_prev_Priority_Sort'], errors='coerce'
+                  ).fillna(df.loc[not_reviewed, 'Priority_Sort']).astype(int)
+
+                  df = df.drop(columns=['_prev_survey_date', '_prev_HOT_HOT_EVS', '_prev_HOT_HOT_Dietary', '_prev_Priority_Sort'])
+              else:
+                  print("Previous file missing expected columns — treating all facilities as newly reviewed this run.")
+          except FileNotFoundError:
+              print("No previous Powerlink_PowerBI_Data.csv found — treating all facilities as newly reviewed this run.")
+
+          df = df.drop(columns=['_survey_date'])
 
           # Region map
           region_map = {
@@ -322,7 +379,9 @@ jobs:
               "total_veteran_facilities": len(df_vet),
               "hot_hot_evs": hot_evs,
               "hot_hot_dietary": hot_diet,
-              "hot_hot_both": both
+              "hot_hot_both": both,
+              "newly_surveyed_this_run": changed_count,
+              "held_at_prior_flags": held_count
           }
           with open('changes_report.json', 'w') as f:
               json.dump(report, f)
