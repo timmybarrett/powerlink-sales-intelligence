@@ -172,7 +172,14 @@ jobs:
           # Find column names flexibly in citations file
           print(f"Citation columns: {list(cit.columns[:10])}")
           tag_col = next((c for c in cit.columns if 'tag' in c.lower()), None)
-          prov_col_cit = next((c for c in cit.columns if 'provider' in c.lower() and ('number' in c.lower() or 'id' in c.lower() or 'ccn' in c.lower())), None)
+          # CCN column detection: check for 'ccn' or 'certification number' FIRST,
+          # since a loose 'provider' + 'id' check incorrectly matches "Provider Name"
+          # (the word "provider" itself contains the substring "id").
+          prov_col_cit = next((c for c in cit.columns if 'ccn' in c.lower()), None)
+          if not prov_col_cit:
+              prov_col_cit = next((c for c in cit.columns if 'certification' in c.lower() and 'number' in c.lower()), None)
+          if not prov_col_cit:
+              prov_col_cit = next((c for c in cit.columns if 'federal' in c.lower() and 'provider' in c.lower() and 'number' in c.lower()), None)
           if not tag_col: tag_col = cit.columns[1]
           if not prov_col_cit: prov_col_cit = cit.columns[0]
           print(f"Tag col: {tag_col}, Provider col: {prov_col_cit}")
@@ -183,17 +190,29 @@ jobs:
           if not prov_col_df: prov_col_df = df.columns[0]
           print(f"Main df provider col: {prov_col_df}")
 
-          # Count EVS citations (F880 = infection control)
-          evs_tags = ['F880','F881','F882','F883','F884','F885']
-          evs_cit = cit[cit[tag_col].isin(evs_tags)].copy()
+          # Normalize deficiency tag numbers to plain 4-digit strings — some CMS
+          # exports store them as "F880", others as plain "0880". Handle both.
+          cit['_tag_norm'] = (
+              cit[tag_col].astype(str).str.upper().str.replace('F', '', regex=False)
+              .str.strip().str.zfill(4)
+          )
+
+          # Count EVS citations (F880 = infection control, plus related environmental tags)
+          evs_tags_norm = ['0880', '0881', '0882', '0883', '0884', '0885']
+          evs_cit = cit[cit['_tag_norm'].isin(evs_tags_norm)].copy()
           evs_counts = evs_cit.groupby(prov_col_cit).size().reset_index(name='EVS_Citation_Count')
           evs_counts = evs_counts.rename(columns={prov_col_cit: prov_col_df})
 
-          # Count dietary citations
-          diet_tags = [f'F{n}' for n in range(800, 813)]
-          diet_cit = cit[cit[tag_col].isin(diet_tags)].copy()
+          # Count dietary citations (F800-F812 = food and nutrition services)
+          diet_tags_norm = [f'{n:04d}' for n in range(800, 813)]
+          diet_cit = cit[cit['_tag_norm'].isin(diet_tags_norm)].copy()
           diet_counts = diet_cit.groupby(prov_col_cit).size().reset_index(name='Dietary_Citation_Count')
           diet_counts = diet_counts.rename(columns={prov_col_cit: prov_col_df})
+
+          # Make sure both join keys are zero-padded strings so the merge actually matches
+          evs_counts[prov_col_df] = evs_counts[prov_col_df].astype(str).str.strip().str.zfill(6)
+          diet_counts[prov_col_df] = diet_counts[prov_col_df].astype(str).str.strip().str.zfill(6)
+          df[prov_col_df] = df[prov_col_df].astype(str).str.strip().str.zfill(6)
 
           # Merge onto the full national df
           df = df.merge(evs_counts, on=prov_col_df, how='left')
