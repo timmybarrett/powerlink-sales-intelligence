@@ -105,14 +105,6 @@ jobs:
           print(f"Using name column: {name_col}")
           df = df.rename(columns={name_col: 'Facility Name'})
 
-          # Filter to veteran homes only
-          vet_mask = df['Facility Name'].str.contains(
-              r"veteran|veter|state home|soldiers|sailor|war veteran",
-              case=False, na=False
-          )
-          df_vet = df[vet_mask].copy()
-          print(f"Veteran facilities found: {len(df_vet)}")
-
           # Find column names flexibly in citations file
           print(f"Citation columns: {list(cit.columns[:10])}")
           tag_col = next((c for c in cit.columns if 'tag' in c.lower()), None)
@@ -121,9 +113,10 @@ jobs:
           if not prov_col_cit: prov_col_cit = cit.columns[0]
           print(f"Tag col: {tag_col}, Provider col: {prov_col_cit}")
 
-          # Find provider number column in main df
-          prov_col_df = next((c for c in df_vet.columns if 'ccn' in c.lower() or ('provider' in c.lower() and 'number' in c.lower())), None)
-          if not prov_col_df: prov_col_df = df_vet.columns[0]
+          # Find provider number column in main df (process the FULL national df now,
+          # not just the veteran subset — the veteran filter is applied at the very end)
+          prov_col_df = next((c for c in df.columns if 'ccn' in c.lower() or ('provider' in c.lower() and 'number' in c.lower())), None)
+          if not prov_col_df: prov_col_df = df.columns[0]
           print(f"Main df provider col: {prov_col_df}")
 
           # Count EVS citations (F880 = infection control)
@@ -138,28 +131,28 @@ jobs:
           diet_counts = diet_cit.groupby(prov_col_cit).size().reset_index(name='Dietary_Citation_Count')
           diet_counts = diet_counts.rename(columns={prov_col_cit: prov_col_df})
 
-          # Merge
-          df_vet = df_vet.merge(evs_counts, on=prov_col_df, how='left')
-          df_vet = df_vet.merge(diet_counts, on=prov_col_df, how='left')
-          df_vet['EVS_Citation_Count'] = pd.to_numeric(df_vet['EVS_Citation_Count'], errors='coerce').fillna(0).astype(int)
-          df_vet['Dietary_Citation_Count'] = pd.to_numeric(df_vet['Dietary_Citation_Count'], errors='coerce').fillna(0).astype(int)
+          # Merge onto the full national df
+          df = df.merge(evs_counts, on=prov_col_df, how='left')
+          df = df.merge(diet_counts, on=prov_col_df, how='left')
+          df['EVS_Citation_Count'] = pd.to_numeric(df['EVS_Citation_Count'], errors='coerce').fillna(0).astype(int)
+          df['Dietary_Citation_Count'] = pd.to_numeric(df['Dietary_Citation_Count'], errors='coerce').fillna(0).astype(int)
 
           # Star ratings - find columns flexibly
-          overall_col = next((c for c in df_vet.columns if 'overall' in c.lower() and 'rating' in c.lower()), None)
-          health_col = next((c for c in df_vet.columns if 'health' in c.lower() and 'inspection' in c.lower() and 'rating' in c.lower()), None)
+          overall_col = next((c for c in df.columns if 'overall' in c.lower() and 'rating' in c.lower()), None)
+          health_col = next((c for c in df.columns if 'health' in c.lower() and 'inspection' in c.lower() and 'rating' in c.lower()), None)
           print(f"Rating cols: overall={overall_col}, health={health_col}")
-          df_vet['Overall_Rating'] = pd.to_numeric(df_vet[overall_col], errors='coerce') if overall_col else 3
-          df_vet['Health_Inspection_Rating'] = pd.to_numeric(df_vet[health_col], errors='coerce') if health_col else 3
+          df['Overall_Rating'] = pd.to_numeric(df[overall_col], errors='coerce') if overall_col else 3
+          df['Health_Inspection_Rating'] = pd.to_numeric(df[health_col], errors='coerce') if health_col else 3
 
           # HOT HOT flags
-          df_vet['HOT_HOT_EVS'] = (
-              (df_vet['EVS_Citation_Count'] >= 2) &
-              (df_vet['Health_Inspection_Rating'] <= 2)
+          df['HOT_HOT_EVS'] = (
+              (df['EVS_Citation_Count'] >= 2) &
+              (df['Health_Inspection_Rating'] <= 2)
           ).map({True: 'Yes', False: 'No'})
 
-          df_vet['HOT_HOT_Dietary'] = (
-              (df_vet['Dietary_Citation_Count'] >= 2) &
-              (df_vet['Health_Inspection_Rating'] <= 2)
+          df['HOT_HOT_Dietary'] = (
+              (df['Dietary_Citation_Count'] >= 2) &
+              (df['Health_Inspection_Rating'] <= 2)
           ).map({True: 'Yes', False: 'No'})
 
           # Priority sort
@@ -170,7 +163,7 @@ jobs:
                   return 2
               else:
                   return 3
-          df_vet['Priority_Sort'] = df_vet.apply(priority, axis=1)
+          df['Priority_Sort'] = df.apply(priority, axis=1)
 
           # Region map
           region_map = {
@@ -189,18 +182,29 @@ jobs:
               'WA':'Pacific','OR':'Pacific','CA':'Pacific','AK':'Pacific','HI':'Pacific',
               'PR':'Territories','VI':'Territories','GU':'Territories',
           }
-          state_col = next((c for c in df_vet.columns if 'state' in c.lower()), 'Provider State')
-          df_vet['Region'] = df_vet[state_col].map(region_map).fillna('Other')
+          state_col = next((c for c in df.columns if 'state' in c.lower()), 'Provider State')
+          df['Region'] = df[state_col].map(region_map).fillna('Other')
 
-          # Save
-          df_vet.to_csv('Powerlink_PowerBI_Data.csv', index=False)
+          # Save the FULL national list
+          df.to_csv('Powerlink_PowerBI_Data.csv', index=False)
+          print(f"Full national SNF list saved: {len(df)} facilities")
 
-          # Changes report
-          hot_evs = int((df_vet['HOT_HOT_EVS'] == 'Yes').sum())
-          hot_diet = int((df_vet['HOT_HOT_Dietary'] == 'Yes').sum())
-          both = int(((df_vet['HOT_HOT_EVS'] == 'Yes') & (df_vet['HOT_HOT_Dietary'] == 'Yes')).sum())
+          # Filter to veteran homes only — separate file, doesn't touch the full list
+          vet_mask = df['Facility Name'].str.contains(
+              r"veteran|veter|state home|soldiers|sailor|war veteran",
+              case=False, na=False
+          )
+          df_vet = df[vet_mask].copy()
+          df_vet.to_csv('Powerlink_PowerBI_VetHomes.csv', index=False)
+          print(f"Veterans homes list saved: {len(df_vet)} facilities")
+
+          # Changes report (based on full national numbers)
+          hot_evs = int((df['HOT_HOT_EVS'] == 'Yes').sum())
+          hot_diet = int((df['HOT_HOT_Dietary'] == 'Yes').sum())
+          both = int(((df['HOT_HOT_EVS'] == 'Yes') & (df['HOT_HOT_Dietary'] == 'Yes')).sum())
           report = {
-              "total_facilities": len(df_vet),
+              "total_facilities": len(df),
+              "total_veteran_facilities": len(df_vet),
               "hot_hot_evs": hot_evs,
               "hot_hot_dietary": hot_diet,
               "hot_hot_both": both
@@ -371,6 +375,6 @@ jobs:
           git config user.name  "Powerlink Bot"
           git config user.email "bot@powerlink"
           git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git add Powerlink_PowerBI_Data.csv changes_report.json
+          git add Powerlink_PowerBI_Data.csv Powerlink_PowerBI_VetHomes.csv changes_report.json
           git diff --staged --quiet || git commit -m "Monthly CMS refresh — $(date +'%B %Y')"
           git push

@@ -35,8 +35,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data
-def load_data():
-    df = pd.read_csv("Powerlink_PowerBI_Data.csv", dtype=str, low_memory=False)
+def load_data(path):
+    df = pd.read_csv(path, dtype=str, low_memory=False)
 
     # ── Normalize column names ──────────────────────────────
     # Map whatever columns exist in the CSV to the names the app expects
@@ -217,12 +217,21 @@ def load_data():
 
     return df
 
-df = load_data()
-
-# ── Sidebar ──────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🏥 Powerlink")
     st.markdown("### Sales Intelligence")
+    st.markdown("---")
+    st.markdown("### 📁 Dataset View")
+    view_choice = st.radio(
+        "Show:",
+        ["🎖️ Veterans Homes (default)", "🇺🇸 Full National SNF List"],
+        index=0
+    )
+
+data_file = "Powerlink_PowerBI_VetHomes.csv" if "Veterans" in view_choice else "Powerlink_PowerBI_Data.csv"
+df = load_data(data_file)
+
+with st.sidebar:
     st.markdown("---")
     st.markdown("### 🔍 Filters")
 
@@ -451,4 +460,5 @@ with tab4:
         "EVS_Citations_3yr":"EVS Cit.","Dietary_Citations_3yr":"Diet Cit.","Ownership_Type":"Ownership","Chain_Name":"Chain"})
 
 st.markdown("---")
-st.caption("Data: CMS HCRIS FY2024 + Care Compare | 14,699 Medicare/Medicaid SNFs | Powerlink Sales Intelligence")
+scope_label = "Veterans Homes" if "Veterans" in view_choice else "Full National SNF List"
+st.caption(f"Data: CMS HCRIS FY2024 + Care Compare | Scope: {scope_label} ({len(df):,} facilities) | Powerlink Sales Intelligence")
