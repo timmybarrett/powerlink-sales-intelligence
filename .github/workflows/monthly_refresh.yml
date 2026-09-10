@@ -231,9 +231,15 @@ jobs:
               df[c] = pd.to_numeric(df[c], errors='coerce')
           print(f"Facilities matched to an HCRIS cost report: {df['hk_direct'].notna().sum()}")
 
-          # Star ratings - find columns flexibly
-          overall_col = next((c for c in df.columns if 'overall' in c.lower() and 'rating' in c.lower()), None)
-          health_col = next((c for c in df.columns if 'health' in c.lower() and 'inspection' in c.lower() and 'rating' in c.lower()), None)
+          # Star ratings - find columns flexibly. Prefer the exact facility-level
+          # column name first — a loose match can otherwise pick a "Chain Average"
+          # column instead, since those appear earlier in the CSV's column order.
+          overall_col = next((c for c in df.columns if c.strip().lower() == 'overall rating'), None)
+          if not overall_col:
+              overall_col = next((c for c in df.columns if 'overall' in c.lower() and 'rating' in c.lower() and 'chain' not in c.lower()), None)
+          health_col = next((c for c in df.columns if c.strip().lower() == 'health inspection rating'), None)
+          if not health_col:
+              health_col = next((c for c in df.columns if 'health' in c.lower() and 'inspection' in c.lower() and 'rating' in c.lower() and 'chain' not in c.lower()), None)
           print(f"Rating cols: overall={overall_col}, health={health_col}")
           df['Overall_Rating'] = pd.to_numeric(df[overall_col], errors='coerce') if overall_col else 3
           df['Health_Inspection_Rating'] = pd.to_numeric(df[health_col], errors='coerce') if health_col else 3
