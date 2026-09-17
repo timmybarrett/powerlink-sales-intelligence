@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root {
+    --navy: #0B1F3A; --navy-soft: #13294B; --gold: #C9A227; --gold-bright: #E4C55E;
+    --bg: #F4F6FA; --card: #FFFFFF; --border: #E3E8F0; --text: #1F2937; --text-muted: #6B7280;
+    --red-bg: rgba(224,102,91,0.12); --red-text: #B23A2E;
+    --amber-bg: rgba(201,162,39,0.15); --amber-text: #8A6D1D;
+    --green-bg: rgba(79,190,133,0.15); --green-text: #2C8256;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  header { background: var(--navy); color: white; padding: 20px 28px; }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: #B9C4D9; font-size: 13px; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px 60px; }
+  .stats-row { display: flex; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; min-width: 130px; }
+  .stat-card .n { font-size: 22px; font-weight: 700; color: var(--navy); }
+  .stat-card .l { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+  .controls-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .controls-row select, .controls-row input { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); font-size: 13px; }
+  .controls-row input[type=text] { flex: 1; min-width: 220px; }
+  .btn { background: var(--navy); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .btn:hover { background: var(--navy-soft); }
+  .btn.secondary { background: white; color: var(--navy); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  th { background: var(--navy); color: white; text-align: left; padding: 10px 12px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; cursor: pointer; white-space: nowrap; }
+  th:hover { background: var(--navy-soft); }
+  td { padding: 10px 12px; font-size: 13px; border-top: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: #FAFBFD; }
+  .company { font-weight: 600; }
+  .muted { color: var(--text-muted); font-size: 11.5px; }
+  .pill { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 8px; white-space: nowrap; }
+  .pill-condition { background: var(--red-bg); color: var(--red-text); }
+  .pill-complaint { background: var(--amber-bg); color: var(--amber-text); }
+  .pill-dietary { background: var(--amber-bg); color: var(--amber-text); }
+  .pill-evs { background: var(--green-bg); color: var(--green-text); }
+  .new-badge { background: var(--green-bg); color: var(--green-text); font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+  .status-select { font-size: 12px; padding: 4px 6px; border-radius: 5px; border: 1px solid var(--border); }
+  .status-New { background: #EEF1F6; }
+  .status-Contacted { background: var(--amber-bg); }
+  .status-Qualified { background: var(--green-bg); }
+  .status-Disqualified { background: var(--red-bg); }
+  .owner-select { font-size: 12px; padding: 4px 6px; border-radius: 5px; border: 1px solid var(--border); background: white; min-width: 110px; }
+  .process-btn { font-size: 12px; padding: 5px 10px; white-space: nowrap; border-radius: 6px; border: 1px solid var(--border); background: white; color: var(--navy); cursor: pointer; }
+  .process-btn.sent { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-text); cursor: default; }
+  .process-btn.sending { opacity: 0.6; cursor: wait; }
+  .process-btn.failed { background: var(--red-bg); color: var(--red-text); border: 1px solid var(--red-text); }
+  .footer-note { font-size: 11.5px; color: var(--text-muted); margin-top: 14px; max-width: 900px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>__TITLE__</h1>
+  <p>__SUBTITLE__</p>
+</header>
+<div class="container">
+  <div class="stats-row" id="statsRow"></div>
+  <div class="controls-row">
+    <select id="filterCategory"><option value="">All categories</option><option value="Dietary">Dietary</option><option value="EVS">EVS</option></select>
+    <select id="filterSeverity"><option value="">All severities</option><option value="Condition">Condition-level</option><option value="Complaint">Complaint-triggered</option></select>
+    <select id="filterState"><option value="">All states</option></select>
+    <input type="text" id="searchBox" placeholder="Search facility or ownership...">
+    <button class="btn secondary" id="exportBtn">Export filtered to CSV</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th data-sort="facility_name">Facility</th>
+        <th data-sort="category">Category</th>
+        <th data-sort="severity">Severity</th>
+        <th data-sort="survey_date">Survey Date</th>
+        <th data-sort="first_seen">First Seen</th>
+        <th data-sort="state">State</th>
+        <th data-sort="ownership">Ownership</th>
+        <th data-sort="star_rating">Star</th>
+        <th>Phone</th>
+        <th>Lead reason</th>
+        <th>Status</th>
+        <th>Owner</th>
+        <th>Send to CRM</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <p class="footer-note">Status changes are saved in this browser only. CCN = CMS Certification Number. "Condition-level" is the actual-harm/immediate-jeopardy tier; "Complaint-triggered" means the survey was launched because someone reported a problem, even where the finding landed at the Standard tier.</p>
+  <p class="footer-note">"Send to CRM" pushes the lead to SharpSpring (create-or-update) with the selected rep as owner, via the same n8n integration used by both tools.</p>
+</div>
+
+<script>
+const WEBHOOK_URL = 'https://plhcss.app.n8n.cloud/webhook/snf-lead-to-sharpspring';
+const OWNER_NAMES = ['Tearsa Wilson', 'Mike Dennis', 'Linda Smith', 'John Rice', 'Tim Barrett', 'Scott Rice'];
+
+const RAW_DATA = __RAW_DATA__;
+
+const STATUS_KEY = 'powerlink_hospital_lead_status_v1';
+const OWNER_KEY = 'powerlink_hospital_lead_owner_v1';
+const SENT_KEY = 'powerlink_hospital_lead_sent_v1';
+let statusMap = {};
+let ownerMap = {};
+let sentMap = {};
+try { statusMap = JSON.parse(localStorage.getItem(STATUS_KEY) || '{}'); } catch(e) { statusMap = {}; }
+try { ownerMap = JSON.parse(localStorage.getItem(OWNER_KEY) || '{}'); } catch(e) { ownerMap = {}; }
+try { sentMap = JSON.parse(localStorage.getItem(SENT_KEY) || '{}'); } catch(e) { sentMap = {}; }
+
+let sortKey = 'severity';
+let sortDir = -1;
+
+function saveStatus() { try { localStorage.setItem(STATUS_KEY, JSON.stringify(statusMap)); } catch(e) {} }
+function saveOwners() { try { localStorage.setItem(OWNER_KEY, JSON.stringify(ownerMap)); } catch(e) {} }
+function saveSent() { try { localStorage.setItem(SENT_KEY, JSON.stringify(sentMap)); } catch(e) {} }
+
+function getStatus(id, fallback) { return statusMap[id] || fallback || 'New'; }
+
+async function sendToCRM(lead, ownerSelectEl, btnEl) {
+  const ownerName = ownerSelectEl.value;
+  if (!ownerName) { alert('Choose an owner before sending to the CRM.'); return; }
+  btnEl.textContent = 'Sending...';
+  btnEl.classList.add('sending');
+  btnEl.disabled = true;
+  try {
+    const resp = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ccn: lead.ccn, facility_name: lead.facility_name, address: lead.address,
+        city: lead.city, state: lead.state, zip: lead.zip, phone: lead.phone,
+        category: lead.category, lead_reason: lead.lead_reason, worst_severity: lead.severity,
+        hot_citation_count: 1, chain_name: lead.ownership, ownerName: ownerName,
+        source: '__SOURCE__',
+      }),
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    sentMap[lead.id] = true;
+    saveSent();
+    statusMap[lead.id] = 'Contacted';
+    saveStatus();
+    btnEl.textContent = 'Sent to CRM';
+    btnEl.classList.remove('sending');
+    btnEl.classList.add('sent');
+    render();
+  } catch (err) {
+    btnEl.textContent = 'Failed - retry';
+    btnEl.classList.remove('sending');
+    btnEl.classList.add('failed');
+    btnEl.disabled = false;
+    console.error('CRM push failed:', err);
+  }
+}
+
+function populateStateFilter() {
+  const states = [...new Set(RAW_DATA.map(r => r.state))].sort();
+  const sel = document.getElementById('filterState');
+  states.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+}
+
+function isNew(firstSeen) {
+  const d = new Date(firstSeen);
+  const now = new Date();
+  return (now - d) / (1000 * 60 * 60 * 24) <= 14;
+}
+
+function getFiltered() {
+  const cat = document.getElementById('filterCategory').value;
+  const sev = document.getElementById('filterSeverity').value;
+  const state = document.getElementById('filterState').value;
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  return RAW_DATA.filter(r => {
+    if (cat && r.category !== cat) return false;
+    if (sev && r.severity !== sev) return false;
+    if (state && r.state !== state) return false;
+    if (q && !(r.facility_name.toLowerCase().includes(q) || (r.ownership || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function sortRows(rows) {
+  const sevRank = { 'Condition': 2, 'Complaint': 1 };
+  return rows.slice().sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (sortKey === 'severity') { av = sevRank[av] || 0; bv = sevRank[bv] || 0; }
+    if (av === undefined || av === null) av = '';
+    if (bv === undefined || bv === null) bv = '';
+    if (av < bv) return -1 * sortDir;
+    if (av > bv) return 1 * sortDir;
+    return 0;
+  });
+}
+
+function renderStats() {
+  const total = RAW_DATA.length;
+  const condition = RAW_DATA.filter(r => r.severity === 'Condition').length;
+  const newCount = RAW_DATA.filter(r => isNew(r.first_seen)).length;
+  const qualified = RAW_DATA.filter(r => getStatus(r.id, r.lead_status) === 'Qualified').length;
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="n">${total}</div><div class="l">Total hot leads</div></div>
+    <div class="stat-card"><div class="n">${condition}</div><div class="l">Condition-level (hottest)</div></div>
+    <div class="stat-card"><div class="n">${newCount}</div><div class="l">New in last 14 days</div></div>
+    <div class="stat-card"><div class="n">${qualified}</div><div class="l">Marked Qualified</div></div>
+  `;
+}
+
+function render() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const rows = sortRows(getFiltered());
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const newBadge = isNew(r.first_seen) ? '<span class="new-badge">NEW</span>' : '';
+    tr.innerHTML = `
+      <td><div class="company">${r.facility_name}${newBadge}</div><div class="muted">${r.city}, ${r.state} &middot; ${r.hospital_type || ''}</div></td>
+      <td><span class="pill pill-${r.category.toLowerCase()}">${r.category}</span></td>
+      <td><span class="pill pill-${r.severity.toLowerCase()}">${r.severity === 'Condition' ? 'Condition-level' : 'Complaint-triggered'}</span></td>
+      <td>${r.survey_date}</td>
+      <td>${r.first_seen}</td>
+      <td>${r.state}</td>
+      <td class="muted">${r.ownership || '\u2014'}</td>
+      <td>${r.star_rating && r.star_rating !== 'Not Available' ? r.star_rating : '\u2014'}</td>
+      <td>${r.phone || '<span class="muted">n/a</span>'}</td>
+      <td class="muted" style="max-width:280px;">${r.lead_reason}</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    `;
+    const cells = tr.querySelectorAll('td');
+    const statusTd = cells[cells.length - 3];
+    const ownerTd = cells[cells.length - 2];
+    const sendTd = cells[cells.length - 1];
+
+    const currentStatus = getStatus(r.id, r.lead_status);
+    const sel = document.createElement('select');
+    sel.className = 'status-select status-' + currentStatus;
+    ['New','Contacted','Qualified','Disqualified'].forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      if (currentStatus === s) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', (e) => {
+      statusMap[r.id] = e.target.value;
+      sel.className = 'status-select status-' + e.target.value;
+      saveStatus();
+      renderStats();
+    });
+    statusTd.appendChild(sel);
+
+    const ownerSel = document.createElement('select');
+    ownerSel.className = 'owner-select';
+    const blankOpt = document.createElement('option');
+    blankOpt.value = ''; blankOpt.textContent = 'Choose owner...';
+    ownerSel.appendChild(blankOpt);
+    OWNER_NAMES.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      if (ownerMap[r.id] === name) opt.selected = true;
+      ownerSel.appendChild(opt);
+    });
+    ownerSel.addEventListener('change', (e) => {
+      ownerMap[r.id] = e.target.value;
+      saveOwners();
+    });
+    ownerTd.appendChild(ownerSel);
+
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'process-btn';
+    const alreadySent = sentMap[r.id];
+    sendBtn.textContent = alreadySent ? 'Sent to CRM' : 'Send to CRM';
+    if (alreadySent) sendBtn.classList.add('sent');
+    sendBtn.addEventListener('click', () => sendToCRM(r, ownerSel, sendBtn));
+    sendTd.appendChild(sendBtn);
+    tbody.appendChild(tr);
+  });
+}
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+    render();
+  });
+});
+
+['filterCategory', 'filterSeverity', 'filterState'].forEach(id => {
+  document.getElementById(id).addEventListener('change', render);
+});
+document.getElementById('searchBox').addEventListener('input', render);
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const rows = getFiltered();
+  const headers = ['CCN','Facility Name','Category','Severity','Survey Date','First Seen','Last Seen',
+                   'State','City','Address','Zip','Phone','Ownership','Hospital Type','Star Rating',
+                   'Lead Reason','Lead Status'];
+  const lines = [headers.join(',')];
+  rows.forEach(r => {
+    const status = getStatus(r.id, r.lead_status);
+    const vals = [r.ccn, r.facility_name, r.category, r.severity, r.survey_date, r.first_seen, r.last_seen,
+                  r.state, r.city, r.address, r.zip, r.phone, r.ownership, r.hospital_type, r.star_rating,
+                  r.lead_reason, status];
+    lines.push(vals.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'status_import.csv';
+  a.click();
+});
+
+populateStateFilter();
+renderStats();
+render();
+</script>
+</body>
+</html>
