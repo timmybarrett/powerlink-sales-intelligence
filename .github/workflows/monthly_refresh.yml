@@ -390,6 +390,7 @@ jobs:
           PYEOF
 
       - name: Send email alert
+        continue-on-error: true
         env:
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
           ALERT_EMAIL_PASSWORD: ${{ secrets.ALERT_EMAIL_PASSWORD }}
