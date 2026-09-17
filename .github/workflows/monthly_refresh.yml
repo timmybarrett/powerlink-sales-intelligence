@@ -389,114 +389,6 @@ jobs:
           print(f"Done. HOT HOT EVS: {hot_evs}, HOT HOT Dietary: {hot_diet}, Both: {both}")
           PYEOF
 
-      - name: Push HOT HOT leads to SharpSpring
-        env:
-          SHARPSPRING_ACCOUNT_ID: ${{ secrets.SHARPSPRING_ACCOUNT_ID }}
-          SHARPSPRING_SECRET_KEY: ${{ secrets.SHARPSPRING_SECRET_KEY }}
-        run: |
-          python3 << 'PYEOF'
-          import pandas as pd
-          import requests
-          import json
-          import hashlib
-          import time
-          import os
-          import uuid
-
-          account_id = os.environ['SHARPSPRING_ACCOUNT_ID']
-          secret_key = os.environ['SHARPSPRING_SECRET_KEY']
-
-          def sharpspring_request(method, params):
-              request_id = str(uuid.uuid4())
-              session_id = hashlib.md5((account_id + secret_key).encode()).hexdigest()
-              payload = {
-                  "method": method,
-                  "params": params,
-                  "id": request_id
-              }
-              url = f"https://api.sharpspring.com/pubapi/v1/?accountID={account_id}&secretKey={secret_key}"
-              resp = requests.post(url, json=payload, timeout=30)
-              resp.raise_for_status()
-              return resp.json()
-
-          # Load the HOT HOT leads
-          df = pd.read_csv('Powerlink_PowerBI_Data.csv', dtype=str)
-          hot = df[(df['HOT_HOT_EVS'] == 'Yes') | (df['HOT_HOT_Dietary'] == 'Yes')].copy()
-          print(f"Total HOT HOT leads to sync: {len(hot)}")
-
-          # Build lead objects for SharpSpring
-          leads = []
-          for _, row in hot.iterrows():
-              facility_name = str(row.get('Facility Name', '')).strip()
-              state = str(row.get('Provider State', '')).strip()
-              city = str(row.get('Provider City', '')).strip()
-              address = str(row.get('Provider Address', '')).strip()
-              phone = str(row.get('Provider Phone Number', '')).strip()
-              beds = str(row.get('Number of Certified Beds', '')).strip()
-              overall_rating = str(row.get('Overall_Rating', '')).strip()
-              health_rating = str(row.get('Health_Inspection_Rating', '')).strip()
-              evs_count = str(row.get('EVS_Citation_Count', '0')).strip()
-              diet_count = str(row.get('Dietary_Citation_Count', '0')).strip()
-              hot_evs = str(row.get('HOT_HOT_EVS', 'No')).strip()
-              hot_diet = str(row.get('HOT_HOT_Dietary', 'No')).strip()
-              priority = str(row.get('Priority_Sort', '3')).strip()
-              federal_id = str(row.get('Federal Provider Number', '')).strip()
-
-              # Determine tier label
-              if hot_evs == 'Yes' and hot_diet == 'Yes':
-                  tier = 'HOT HOT EVS + Dietary'
-              elif hot_evs == 'Yes':
-                  tier = 'HOT HOT EVS'
-              else:
-                  tier = 'HOT HOT Dietary'
-
-              care_compare_url = f"https://www.medicare.gov/care-compare/details/nursing-home/{federal_id}" if federal_id else ""
-
-              lead = {
-                  "companyName": facility_name,
-                  "city": city,
-                  "state": state,
-                  "street": address,
-                  "phoneNumber": phone,
-                  "description": (
-                      f"Opportunity Tier: {tier} | "
-                      f"Overall Rating: {overall_rating} stars | "
-                      f"Health Inspection Rating: {health_rating} stars | "
-                      f"EVS Citations: {evs_count} | "
-                      f"Dietary Citations: {diet_count} | "
-                      f"Certified Beds: {beds} | "
-                      f"CMS ID: {federal_id} | "
-                      f"Care Compare: {care_compare_url}"
-                  ),
-                  "leadStatus": "Open",
-                  "firstName": "Director",
-                  "lastName": facility_name,
-                  "emailAddress": "",
-              }
-              leads.append(lead)
-
-          # Push in batches of 20
-          batch_size = 20
-          total_pushed = 0
-          errors = 0
-          for i in range(0, len(leads), batch_size):
-              batch = leads[i:i+batch_size]
-              try:
-                  result = sharpspring_request("createLeads", {"objects": batch})
-                  if result.get('result') and result['result'].get('creates'):
-                      pushed = len([r for r in result['result']['creates'] if r.get('success')])
-                      total_pushed += pushed
-                      print(f"Batch {i//batch_size + 1}: pushed {pushed}/{len(batch)}")
-                  else:
-                      print(f"Batch {i//batch_size + 1} response: {json.dumps(result)[:200]}")
-                  time.sleep(0.5)  # rate limit courtesy
-              except Exception as e:
-                  print(f"Batch {i//batch_size + 1} error: {e}")
-                  errors += 1
-
-          print(f"\nSharpSpring sync complete. Pushed: {total_pushed}, Errors: {errors}")
-          PYEOF
-
       - name: Send email alert
         env:
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
@@ -529,7 +421,7 @@ jobs:
             <tr style="background:#e8f4fd;"><td style="padding:12px;font-weight:bold;">HOT HOT Dietary Leads</td><td style="padding:12px;color:#c0392b;font-weight:bold;">{report['hot_hot_dietary']}</td></tr>
             <tr><td style="padding:12px;font-weight:bold;">Both EVS + Dietary</td><td style="padding:12px;color:#8e44ad;font-weight:bold;">{report['hot_hot_both']}</td></tr>
           </table>
-          <p style="margin-top:20px;">All HOT HOT leads have been automatically pushed to SharpSpring CRM.</p>
+          <p style="margin-top:20px;">HOT HOT facilities are ready to review in the Hot Lead Tool dashboards — send them to SharpSpring from there.</p>
           <a href="https://powerlink-sales-intel.streamlit.app" style="display:inline-block;background:#1a1a2e;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin-top:10px;">View Live Dashboard</a>
           </body></html>
           """
