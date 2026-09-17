@@ -544,11 +544,205 @@ jobs:
           print("Email sent successfully")
           PYEOF
 
+      - name: Refresh Hot Lead Tool dashboards (Hospital + SNF)
+        run: |
+          python3 << 'PYEOF'
+          import json, csv, time, urllib.request
+          from datetime import datetime, timedelta
+
+          CUTOFF = datetime.utcnow() - timedelta(days=18*30)
+          API = "https://ipw27058c6.execute-api.us-west-1.amazonaws.com/prd"
+          UA = "Mozilla/5.0 (Powerlink Hot Lead Tool refresh)"
+
+          def fetch_json(url, retries=3):
+              req = urllib.request.Request(url, headers={"User-Agent": UA})
+              for attempt in range(retries):
+                  try:
+                      with urllib.request.urlopen(req, timeout=20) as r:
+                          return json.loads(r.read().decode())
+                  except Exception as e:
+                      if attempt == retries - 1:
+                          print(f"  FAILED {url}: {e}")
+                          return None
+                      time.sleep(1)
+
+          # ---------- HOSPITAL ----------
+          print("=== Hospital Hot Lead Tool ===")
+          meta_url = "https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items/xubh-q36u"
+          with urllib.request.urlopen(meta_url, timeout=30) as r:
+              meta = json.load(r)
+          hgi_url = next(d["downloadURL"] for d in meta["distribution"] if d["downloadURL"].endswith(".csv"))
+          urllib.request.urlretrieve(hgi_url, "Hospital_General_Information.csv")
+
+          cms_info = {}
+          with open("Hospital_General_Information.csv", encoding="utf-8-sig", newline="") as f:
+              for row in csv.DictReader(f):
+                  fid = row["Facility ID"].strip().zfill(6)
+                  cms_info[fid] = {
+                      "hospital_type": row.get("Hospital Type", "").strip(),
+                      "ownership": row.get("Hospital Ownership", "").strip(),
+                      "phone": row.get("Telephone Number", "").strip(),
+                      "star_rating": row.get("Hospital overall rating", "").strip(),
+                      "address": row.get("Address", "").strip(),
+                  }
+
+          DIETARY_TAGS = {f"A06{n:02d}" for n in range(18, 38)}
+          EVS_TAGS = {"A0700", "A0701"} | {f"A07{n:02d}" for n in range(47, 58)}
+          CONDITION_TAGS = {"A0618", "A0700", "A0747"}
+          STATES = ["al","ak","az","ar","ca","co","ct","de","dc","fl","ga","hi","id","il","in","ia",
+                    "ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm",
+                    "ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa",
+                    "wv","wi","wy"]
+
+          hospital_leads = []
+          for state in STATES:
+              hlist = fetch_json(f"{API}/hospital-list/{state}")
+              if not hlist:
+                  continue
+              for h in hlist:
+                  mrd = h.get("most_recent_inspection_date")
+                  if not mrd:
+                      continue
+                  try:
+                      d = datetime.strptime(mrd, "%Y-%m-%d")
+                  except ValueError:
+                      continue
+                  if d < CUTOFF:
+                      continue
+                  detail = fetch_json(f"{API}/hospital-detail/{h['id']}")
+                  if not detail:
+                      continue
+                  for rep in detail.get("reports", []):
+                      idate = rep.get("inspection_date")
+                      if not idate or not rep.get("has_details"):
+                          continue
+                      try:
+                          d2 = datetime.strptime(idate, "%Y-%m-%d")
+                      except ValueError:
+                          continue
+                      if d2 < CUTOFF:
+                          continue
+                      report_id = rep["detail_url"].rsplit("/", 1)[-1]
+                      rdetail = fetch_json(f"{API}/report-detail/{report_id}")
+                      if not rdetail:
+                          continue
+                      for cit in rdetail.get("deficiencies_text", []):
+                          tag = cit.get("tag", "")
+                          if tag in DIETARY_TAGS:
+                              category = "Dietary"
+                          elif tag in EVS_TAGS:
+                              category = "EVS"
+                          else:
+                              continue
+                          severity = "Condition" if tag in CONDITION_TAGS else "Complaint"
+                          extra = cms_info.get(h["id"], {})
+                          hospital_leads.append({
+                              "ccn": h["id"], "category": category,
+                              "facility_name": detail.get("name", ""),
+                              "hospital_type": extra.get("hospital_type", ""),
+                              "address": detail.get("address", "") or extra.get("address", ""),
+                              "city": detail.get("city", ""), "state": detail.get("state", ""),
+                              "zip": detail.get("zip", ""), "phone": extra.get("phone", ""),
+                              "ownership": detail.get("ownership", "") or extra.get("ownership", ""),
+                              "star_rating": extra.get("star_rating", ""),
+                              "tag": tag, "tag_desc": cit.get("summary", ""), "severity": severity,
+                              "survey_date": idate,
+                              "lead_reason": f"{severity}-level {category} citation ({tag}: {cit.get('summary','')}) \u2014 surveyed {idate}",
+                              "id": f"{h['id']}_{category}_{tag}_{idate}",
+                          })
+              time.sleep(0.2)
+          print(f"Hospital leads found: {len(hospital_leads)}")
+
+          # ---------- SNF ----------
+          print("=== SNF Hot Lead Tool ===")
+          CONDITION_SEVERITY = {"G", "H", "I", "J", "K", "L"}
+          providers = {}
+          with open("NH_ProviderInfo_latest.csv", encoding="utf-8-sig", newline="") as f:
+              for row in csv.DictReader(f):
+                  ccn = row["CMS Certification Number (CCN)"].strip()
+                  providers[ccn] = {
+                      "facility_name": row.get("Provider Name", "").strip(),
+                      "address": row.get("Provider Address", "").strip(),
+                      "city": row.get("City/Town", "").strip(),
+                      "state": row.get("State", "").strip(),
+                      "zip": row.get("ZIP Code", "").strip(),
+                      "phone": row.get("Telephone Number", "").strip(),
+                      "ownership": row.get("Ownership Type", "").strip(),
+                      "chain_name": row.get("Chain Name", "").strip(),
+                      "star_rating": row.get("Overall Rating", "").strip(),
+                  }
+
+          def snf_category(dcat):
+              if dcat == "Nutrition and Dietary Deficiencies":
+                  return "Dietary"
+              if dcat in ("Environmental Deficiencies", "Infection Control Deficiencies"):
+                  return "EVS"
+              return None
+
+          snf_leads = []
+          with open("NH_HealthCitations_latest.csv", encoding="utf-8-sig", newline="") as f:
+              for row in csv.DictReader(f):
+                  category = snf_category(row.get("Deficiency Category", "").strip())
+                  if not category:
+                      continue
+                  sdate = row.get("Survey Date", "").strip()
+                  try:
+                      d = datetime.strptime(sdate, "%Y-%m-%d")
+                  except ValueError:
+                      continue
+                  if d < CUTOFF:
+                      continue
+                  sev_code = row.get("Scope Severity Code", "").strip()
+                  if sev_code not in CONDITION_SEVERITY:
+                      continue  # SNF tool ships Condition-level only (see 2026-09 build notes)
+                  ccn = row["CMS Certification Number (CCN)"].strip()
+                  p = providers.get(ccn, {})
+                  tag = f"F{row.get('Deficiency Tag Number','').strip()}"
+                  tag_desc = row.get("Deficiency Description", "").strip()
+                  snf_leads.append({
+                      "ccn": ccn, "category": category,
+                      "facility_name": p.get("facility_name") or row.get("Provider Name", ""),
+                      "hospital_type": p.get("chain_name") or "Independent",
+                      "address": p.get("address", ""), "city": p.get("city", ""),
+                      "state": p.get("state", ""), "zip": p.get("zip", ""),
+                      "phone": p.get("phone", ""), "ownership": p.get("ownership", ""),
+                      "star_rating": p.get("star_rating", ""),
+                      "tag": tag, "tag_desc": tag_desc, "severity": "Condition",
+                      "survey_date": sdate,
+                      "lead_reason": f"Condition-level {category} citation ({tag}: {tag_desc}) \u2014 surveyed {sdate}",
+                      "id": f"{ccn}_{category}_{tag}_{sdate}",
+                  })
+          print(f"SNF leads found: {len(snf_leads)}")
+
+          # ---------- RENDER ----------
+          TODAY = datetime.utcnow().strftime("%Y-%m-%d")
+          template = open("lead_tool_template.html").read()
+
+          def render(leads, title, subtitle, source, out_path):
+              rows = []
+              for r in leads:
+                  rows.append({**r, "first_seen": TODAY, "last_seen": TODAY, "lead_status": "New"})
+              html = template.replace("__TITLE__", title).replace("__SUBTITLE__", subtitle)
+              html = html.replace("__SOURCE__", source)
+              html = html.replace("__RAW_DATA__", json.dumps(rows, separators=(",", ": ")))
+              with open(out_path, "w") as f:
+                  f.write(html)
+              print(f"Wrote {out_path}: {len(rows)} rows")
+
+          render(hospital_leads, "Powerlink Hospital Hot Lead Tool",
+                 "Sourced from hospitalinspections.org (AHCJ) CMS-2567 data (Condition-level or Complaint-triggered Dietary/EVS citations, last 18 months)",
+                 "Hospital", "powerlink_hospital_lead_tool_final.html")
+
+          render(snf_leads, "Powerlink SNF Hot Lead Tool",
+                 "Sourced from CMS Nursing Home Health Citations data (Condition-level Dietary/EVS citations \u2014 actual harm or higher \u2014 last 18 months)",
+                 "SNF", "powerlink_snf_lead_tool_final.html")
+          PYEOF
+
       - name: Commit updated data back to GitHub
         run: |
           git config user.name  "Powerlink Bot"
           git config user.email "bot@powerlink"
           git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git add Powerlink_PowerBI_Data.csv Powerlink_PowerBI_VetHomes.csv changes_report.json
+          git add Powerlink_PowerBI_Data.csv Powerlink_PowerBI_VetHomes.csv changes_report.json powerlink_hospital_lead_tool_final.html powerlink_snf_lead_tool_final.html
           git diff --staged --quiet || git commit -m "Monthly CMS refresh — $(date +'%B %Y')"
           git push
