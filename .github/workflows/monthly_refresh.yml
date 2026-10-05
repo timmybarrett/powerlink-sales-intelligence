@@ -643,6 +643,8 @@ jobs:
                   rows.append({**r, "first_seen": TODAY, "last_seen": TODAY, "lead_status": "New"})
               html = template.replace("__TITLE__", title).replace("__SUBTITLE__", subtitle)
               html = html.replace("__SOURCE__", source)
+              hook = "hospital-lead-to-sharpspring" if source == "Hospital" else "snf-lead-to-sharpspring"
+              html = html.replace("__WEBHOOK_URL__", "https://plhcss.app.n8n.cloud/webhook/" + hook)
               html = html.replace("__RAW_DATA__", json.dumps(rows, separators=(",", ": ")))
               with open(out_path, "w") as f:
                   f.write(html)
