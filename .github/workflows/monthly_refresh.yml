@@ -482,9 +482,9 @@ jobs:
           DIETARY_TAGS = {f"A06{n:02d}" for n in range(18, 38)}
           EVS_TAGS = {"A0700", "A0701"} | {f"A07{n:02d}" for n in range(47, 58)}
           CONDITION_TAGS = {"A0618", "A0700", "A0747"}
-          STATES = ["al","ak","az","ar","ca","co","ct","de","dc","fl","ga","hi","id","il","in","ia",
+          STATES = ["al","ak","az","ar","co","ct","de","dc","fl","ga","hi","id","in","ia",
                     "ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm",
-                    "ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa",
+                    "nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa",
                     "wv","wi","wy"]
 
           hospital_leads = []
@@ -544,7 +544,33 @@ jobs:
                               "id": f"{h['id']}_{category}_{tag}_{idate}",
                           })
               time.sleep(0.2)
-          print(f"Hospital leads found: {len(hospital_leads)}")
+          print(f"Hospital citations found (before HOT HOT rule): {len(hospital_leads)}")
+
+          # ---------- HOT HOT LEAD RULE ----------
+          # A hospital is a HOT HOT lead when it is NOT in an excluded state AND either:
+          #   (a) its CMS Overall Hospital Quality Star Rating is 1 or 2, OR
+          #   (b) it has no CMS star rating (small/critical access, psych, children's, etc.)
+          #       AND it has at least one Condition-level Dietary/EVS citation.
+          EXCLUDED_STATES = {"CA", "IL", "NY"}
+          LOW_STARS = {"1", "2"}
+          RATED = {"1", "2", "3", "4", "5"}
+          hospital_leads = [r for r in hospital_leads
+                            if (r.get("state") or "").strip().upper() not in EXCLUDED_STATES]
+          condition_ccns = {r["ccn"] for r in hospital_leads if r["severity"] == "Condition"}
+          hot = []
+          for r in hospital_leads:
+              star = (r.get("star_rating") or "").strip()
+              if star in LOW_STARS:
+                  basis = f"HOT HOT: CMS {star}-star hospital"
+              elif star not in RATED and r["ccn"] in condition_ccns:
+                  basis = "HOT HOT: unrated by CMS + Condition-level citation"
+              else:
+                  continue
+              r["lead_reason"] = f"{basis} | {r['lead_reason']}"
+              hot.append(r)
+          hospital_leads = hot
+          print(f"HOT HOT hospital leads: {len(hospital_leads)} rows, "
+                f"{len({r['ccn'] for r in hospital_leads})} hospitals")
 
           # ---------- SNF ----------
           print("=== SNF Hot Lead Tool ===")
@@ -623,7 +649,7 @@ jobs:
               print(f"Wrote {out_path}: {len(rows)} rows")
 
           render(hospital_leads, "Powerlink Hospital Hot Lead Tool",
-                 "Sourced from hospitalinspections.org (AHCJ) CMS-2567 data (Condition-level or Complaint-triggered Dietary/EVS citations, last 18 months)",
+                 "HOT HOT leads: CMS 1-2 star hospitals, or unrated hospitals with a Condition-level Dietary/EVS citation (last 18 months). Excludes CA, IL, NY. Citations from hospitalinspections.org (AHCJ) CMS-2567 data",
                  "Hospital", "powerlink_hospital_lead_tool_final.html")
 
           render(snf_leads, "Powerlink SNF Hot Lead Tool",
