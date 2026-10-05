@@ -93,7 +93,7 @@
 </div>
 
 <script>
-const WEBHOOK_URL = 'https://plhcss.app.n8n.cloud/webhook/snf-lead-to-sharpspring';
+const WEBHOOK_URL = '__WEBHOOK_URL__';
 const OWNER_NAMES = ['Tearsa Wilson', 'Mike Dennis', 'Linda Smith', 'John Rice', 'Tim Barrett', 'Scott Rice'];
 
 const RAW_DATA = __RAW_DATA__;
@@ -132,6 +132,7 @@ async function sendToCRM(lead, ownerSelectEl, btnEl) {
         city: lead.city, state: lead.state, zip: lead.zip, phone: lead.phone,
         category: lead.category, lead_reason: lead.lead_reason, worst_severity: lead.severity,
         hot_citation_count: 1, chain_name: lead.ownership, ownerName: ownerName,
+        hospital_type: lead.hospital_type, star_rating: lead.star_rating, ownership: lead.ownership,
         source: '__SOURCE__',
       }),
     });
